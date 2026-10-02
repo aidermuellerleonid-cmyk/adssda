@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kalender</title>
+<style>
+
+:root{color-scheme:dark;
+--bg:#07090d;--sf:#12151c;--sv:#1b212b;--sh:#232a36;--tx:#e7eaf0;--mut:#aeb8c6;--pr:#7bc4ff;--te:#35d6c0;--ol:#2a313d;
+--g:#2ecc71;--y:#f5c542;--r:#ff6b6b;--gb:#123824;--yb:#3d3414;--rb:#4a1d1f;--gt:#6fe3a0;--yt:#f5d97a;--rt:#ff9a9a}
+*{box-sizing:border-box}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;color:inherit;border:0;cursor:pointer}
+.card{background:var(--sf);border-radius:18px;padding:16px;margin-bottom:12px}
+.card h2{margin:0 0 10px;font-size:16px;font-weight:600}
+.mut{color:var(--mut);font-size:13px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0;font-size:14px}
+.head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.head b{font-size:19px}
+.nv{background:var(--sh);border-radius:10px;padding:8px 14px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.dow{text-align:center;color:var(--mut);font-size:12px;padding:3px}
+.day{background:var(--sv);border-radius:10px;min-height:54px;padding:4px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;border:2px solid transparent}
+.day.sel{border-color:var(--pr)}.day.empty{background:none;pointer-events:none}.n{font-size:12px;font-weight:600}
+.day.today .n{background:#0d47a1;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center}
+.dots{display:flex;gap:2px;flex-wrap:wrap}.dot{width:7px;height:7px;border-radius:50%;background:var(--ol)}
+.G{background:var(--g)}.Y{background:var(--y)}.R{background:var(--r)}
+.q{margin:14px 0}.q p{margin:0 0 6px;font-weight:600;font-size:14px}.opts{display:grid;gap:6px}
+.opt{background:var(--sv);border-radius:12px;padding:12px;text-align:left;display:flex;gap:10px;align-items:center;border:2px solid transparent;font-size:14px}
+.opt i{width:11px;height:11px;border-radius:50%;flex:none}
+.opt.on.G{background:var(--gb);border-color:var(--g)}.opt.on.Y{background:var(--yb);border-color:var(--y)}.opt.on.R{background:var(--rb);border-color:var(--r)}
+.opt:disabled{cursor:default;opacity:.5}.opt.on:disabled{opacity:1}
+.sum{display:flex;gap:8px;margin:10px 0}.sum div{flex:1;text-align:center;border-radius:12px;padding:10px;font-size:24px;font-weight:700}.sum small{display:block;font-size:12px;font-weight:400}
+.sum .G{background:var(--gb);color:var(--gt)}.sum .Y{background:var(--yb);color:var(--yt)}.sum .R{background:var(--rb);color:var(--rt)}
+.stack{height:10px;border-radius:5px;background:var(--sh);overflow:hidden;display:flex;margin:8px 0}
+.note{color:var(--mut);font-size:13px;margin:6px 0}.clear{background:none;color:var(--mut);text-decoration:underline;font-size:13px;margin-top:6px}
+.wrap{padding:8px 16px 28px}
+
+</style></head><body>
+<div class="wrap">
+ <div class="card"><div class="head"><button class="nv" id="prev">◀</button><b id="title"></b><button class="nv" id="next">▶</button></div>
+  <div class="grid" id="grid"></div>
+  <p class="mut" style="margin:10px 0 0">Tag antippen und die fünf Fragen beantworten. Nur der heutige Tag ist bearbeitbar.</p></div>
+ <div class="card" id="dayc"></div>
+ <div class="card" id="monc"></div></div>
+
+
+<script>
+
+const $=id=>document.getElementById(id);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+/* Kalender (Logik aus Ziele-Kalender übernommen) */
+const AREAS=[
+{k:'sleep',n:'Schlaf',q:'Wie viele Stunden hast du geschlafen?',o:[['G','8 Stunden oder mehr'],['Y','4 bis unter 8 Stunden'],['R','Weniger als 4 Stunden']]},
+{k:'kcal',n:'Kalorienziel',q:'Wie nah warst du heute an deinem Kalorien-Defizitziel?',o:[['G','Ziel erreicht (weniger als 100 kcal daneben)'],['Y','Weniger als 500 kcal daneben'],['R','Gar kein Defizit erreicht']]},
+{k:'goon',n:'Goonen',q:'Hast du heute auf Goonen verzichtet?',o:[['G','Ja'],['Y','Teilweise / weniger als vorgenommen'],['R','Nein']]},
+{k:'learn',n:'Lernen',q:'Wie lange hast du heute gelernt?',o:[['G','Mindestens 60 Minuten'],['Y','1 bis 59 Minuten'],['R','Gar nicht']]},
+{k:'sport',n:'Sport',q:'Wie viel Sport hast du heute gemacht?',o:[['G','Mindestens 30 Minuten'],['Y','1 bis 29 Minuten'],['R','Gar keinen']]}];
+const MN=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+let data=store.get('ziele',{});
+const key=(y,m,d)=>`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+const todayK=()=>{const d=new Date();return key(d.getFullYear(),d.getMonth(),d.getDate())};
+let lastDay=null;let now=new Date(),Y=now.getFullYear(),M=now.getMonth(),sel=todayK();
+const count=e=>{const c={G:0,Y:0,R:0};if(e)Object.values(e).forEach(v=>c[v]++);return c};
+const bal=e=>{const c=count(e);let n=0;while(c.R>0&&c.G>0){c.R--;c.G--;n++}while(c.R>0&&c.Y>=2){c.R--;c.Y-=2;n++}c.n=n;return c};
+lastDay=todayK();
+function cal(){
+ now=new Date();$('title').textContent=MN[M]+' '+Y;
+ let h=['Mo','Di','Mi','Do','Fr','Sa','So'].map(d=>`<div class="dow">${d}</div>`).join('');
+ const off=(new Date(Y,M,1).getDay()+6)%7,dim=new Date(Y,M+1,0).getDate();
+ for(let i=0;i<off;i++)h+='<div class="day empty"></div>';
+ for(let d=1;d<=dim;d++){const k=key(Y,M,d),e=data[k]||{};
+  h+=`<button class="day${k==sel?' sel':''}${k==todayK()?' today':''}" data-k="${k}"><span class="n">${d}</span><span class="dots">${AREAS.map(a=>`<span class="dot ${e[a.k]||''}"></span>`).join('')}</span></button>`}
+ $('grid').innerHTML=h;
+ $('grid').querySelectorAll('.day[data-k]').forEach(b=>b.onclick=()=>{sel=b.dataset.k;cal()});
+ const [sy,sm,sd]=sel.split('-').map(Number),e=data[sel]||{},c=bal(e),locked=sel!==todayK();
+ $('dayc').innerHTML=`<h2>${sd}. ${MN[sm-1]} ${sy}</h2><div class="sum"><div class="G">${c.G}<small>grün</small></div><div class="Y">${c.Y}<small>gelb</small></div><div class="R">${c.R}<small>rot</small></div></div>`+
+ (c.n?`<p class="note">⚖️ ${c.n} roter Bereich ausgeglichen (1 Rot = 1 Grün oder 2 Gelb)</p>`:'')+(locked?'<p class="note">🔒 Nur der heutige Tag kann bearbeitet werden.</p>':'')+
+ AREAS.map(a=>`<div class="q"><p>${a.n}: ${a.q}</p><div class="opts">${a.o.map(([f,t])=>`<button class="opt ${f}${e[a.k]==f?' on':''}" data-a="${a.k}" data-f="${f}"${locked?' disabled':''}><i class="${f}"></i>${t}</button>`).join('')}</div></div>`).join('')+
+ (locked?'':'<button class="clear" id="clr">Tag zurücksetzen</button>');
+ $('dayc').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{const d=data[sel]=data[sel]||{};if(d[b.dataset.a]==b.dataset.f)delete d[b.dataset.a];else d[b.dataset.a]=b.dataset.f;store.set('ziele',data);cal()});
+ if($('clr'))$('clr').onclick=()=>{delete data[sel];store.set('ziele',data);cal()};
+ const t={G:0,Y:0,R:0};let days=0,perfect=0;
+ for(let d=1;d<=dim;d++){const x=data[key(Y,M,d)];if(!x||!Object.keys(x).length)continue;days++;const bb=bal(x);t.G+=bb.G;t.Y+=bb.Y;t.R+=bb.R;if(count(x).G==5)perfect++}
+ const tot=t.G+t.Y+t.R,pct=tot?Math.round((t.G+t.Y*.5)/tot*100):0;
+ let streak=0;{let dt=new Date(),first=true;for(;;){const x=data[key(dt.getFullYear(),dt.getMonth(),dt.getDate())];if(x&&Object.keys(x).length==5&&bal(x).R==0)streak++;else if(!first)break;first=false;dt.setDate(dt.getDate()-1)}}
+ const msg=!tot?'Noch keine Einträge – starte heute! 💪':pct>=80?'Starker Monat – weiter so! 🔥':pct>=50?'Solide, da geht noch mehr! 👍':'Jeder Tag ist ein neuer Anfang. 🌱';
+ $('monc').innerHTML=`<h2>Monatsüberblick</h2><div class="mut">${days} Tage erfasst · ${perfect} perfekte Tage · Serie: ${streak} 🔥</div>
+ <div class="row"><b style="font-size:28px">${pct}%</b><span class="mut">Zielerreichung</span></div>
+ <div class="stack"><div class="G" style="width:${tot?t.G/tot*100:0}%"></div><div class="Y" style="width:${tot?t.Y/tot*100:0}%"></div><div class="R" style="width:${tot?t.R/tot*100:0}%"></div></div>
+ <div class="row"><span>🟢 ${t.G}</span><span>🟡 ${t.Y}</span><span>🔴 ${t.R}</span></div><p style="margin:8px 0 0">${msg}</p>`;
+}
+$('prev').onclick=()=>{M--;if(M<0){M=11;Y--}cal()};
+$('next').onclick=()=>{M++;if(M>11){M=0;Y++}cal()};
+cal();
+setInterval(()=>{const k=todayK();if(k!==lastDay){lastDay=k;const d=new Date();Y=d.getFullYear();M=d.getMonth();sel=k;cal()}},30000);
+</script></body></html>
